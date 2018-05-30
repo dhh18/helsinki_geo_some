@@ -24,6 +24,7 @@ import geopandas as gpd
 from shapely.geometry import *
 import geojson
 import io
+from string import punctuation
  
  #### Tuomo's code  from https://www.dropbox.com/s/3982fdy56zn7ggw/run_fasttext.py starts
 
@@ -142,10 +143,10 @@ def detect_lang(caption):
 #### Tuomo's code  from https://www.dropbox.com/s/3982fdy56zn7ggw/run_fasttext.py ends
 
 
-def extract_hashtags(s):
-	return set(part[1:] for part in s.split() if part.startswith('#'))
+# def extract_hashtags(s):
+# 	return set(part[1:] for part in s.split() if part.startswith('#'))
 
-df = pd.read_csv("geosome_instagram.tsv", na_values=['', ' ', '\N'], encoding='latin-1', sep="\t")
+df = pd.read_csv("geosome_instagram.tsv", na_values=['', ' ', '\N'], encoding='utf-8', sep="\t")
 initial_rows = len(df)
 
 # Find how many blank cells in each columns
@@ -170,8 +171,39 @@ df.drop('photourl', axis=1, inplace=True)
 
 
 # Need to check the hashtag extraction function. Sid is not sure about the accuracy!
-df['ext_hashtags']= df.apply(lambda row: extract_hashtags(row['text']), axis=1)
+#df['ext_hashtags']= df.apply(lambda row: extract_hashtags(row['text']), axis=1)
 #print list(df.columns.values)
+
+####################################
+
+print 'Extracting hashtags'
+hashtags = []
+delimiters = ' ' + punctuation.replace('#', '')
+
+def extract_hashtag(caption_part, delimiters):
+	part = caption_part
+	for delimiter in delimiters:
+		part = part.split(delimiter)[0]
+	return part
+
+def seperate_hashtags(text):
+	caption = text.replace('@', '')
+	parts = caption.split('#')
+	local_hashtags = []
+	for part in parts[1:]:
+		local_hashtags.append(extract_hashtag(part, delimiters))
+	caption = ''.join(parts)
+	for hashtag in local_hashtags:
+		caption = caption.replace(hashtag, '')
+	hashtags_only = ';'.join(local_hashtags)
+	return pd.Series((caption, hashtags_only))
+
+
+df[['caption', 'hashtags_only']] = df.apply(lambda row: seperate_hashtags(row['text']), axis=1)
+
+###############
+
+
 
 print("Importing Helsinki polygon data")
 json_file = io.open('helsinki.json', 'r', encoding='utf-8')  # Reading the GeoJSON file
@@ -199,7 +231,7 @@ model = fastText.load_model('fastText_models/lid.176.bin')
  
 # Get predictions for language identification
 print "Performing language detection"
-df['langid'] = df['text'].apply(lambda x: detect_lang(x))
+df['langid'] = df['caption'].apply(lambda x: detect_lang(x))
 
 print "Successfully managed to detect languages for {} rows".format(len(df)-df['langid'].isnull().sum())
 
@@ -208,10 +240,20 @@ df.dropna(subset=['langid'], inplace=True)
 
 
 language_diversity_df = df['langid'].value_counts()
-language_diversity_df.to_csv('language_diversity.csv', sep='\t')
+language_diversity_df.to_csv('language_diversity_improv2.csv', sep='\t')
 print "Count of successfully detected languages are saved in language_diversity.csv"
  
 # Save DataFrame to disk
 print 'Saving processed dataframe to instagram_processed.pkl as well as to a .tsv file named instagram_processed.tsv'
-df.to_csv('instagram_processed.tsv', sep='\t', quoting=csv.QUOTE_NONNUMERIC, encoding='latin-1', index=False)
-df.to_pickle('instagram_processed.pkl')
+df.to_csv('instagram_processed_improv2.tsv', sep='\t', quoting=csv.QUOTE_NONNUMERIC, encoding='utf-8', index=False)
+df.to_pickle('instagram_processed_improv2.pkl')
+
+
+#########################
+
+
+
+
+
+
+
